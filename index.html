@@ -295,7 +295,7 @@
 
 (() => {
 
-  const STORAGE_KEY = "cubeArtBLDHistory_v1";
+  const STORAGE_KEY = "cubeArtBLDHistory_v2";
 
   const COLORS = [
     { name: "white",  hex: "#ffffff" },
@@ -306,8 +306,10 @@
     { name: "green",  hex: "#16a05d" }
   ];
 
-
-  let colorCount = 3;
+  /*
+    mode: 2, 3, 4, 5, 6, または "random"
+  */
+  let selectedMode = 3;
 
   let pattern = [];
 
@@ -396,51 +398,45 @@
   }
 
 
+  function shuffleArray(arr) {
+    const shuffled = [...arr];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+
   function newPattern() {
 
-    /*
-      6色すべてからランダムに
-      colorCount種類を選ぶ。
-      
-      例：
-      2色 → 赤＋青
-      2色 → 白＋緑
-      2色 → 黄＋オレンジ
-      
-      のように毎回変わる。
-    */
-
-    const shuffled = [...COLORS];
-
-    for (
-      let i = shuffled.length - 1;
-      i > 0;
-      i--
-    ) {
-
-      const j =
-        Math.floor(Math.random() * (i + 1));
-
-      [shuffled[i], shuffled[j]] =
-        [shuffled[j], shuffled[i]];
-
+    // 実際に何色使うかを決定
+    let actualCount = selectedMode;
+    if (selectedMode === "random") {
+      // 2〜6の中からランダム
+      actualCount = Math.floor(Math.random() * 5) + 2;
     }
 
+    const shuffledColors = shuffleArray(COLORS);
+    const palette = shuffledColors.slice(0, actualCount);
 
-    const palette =
-      shuffled.slice(0, colorCount);
-
-
-    /*
-      9マスそれぞれを
-      選ばれた色から完全ランダムに決定
-    */
-
-    pattern =
-      Array.from(
+    if (actualCount === 6) {
+      /*
+        6色選ばれた場合は、9マスの中に6色が「必ず」すべて1回以上入るようにし、
+        残りの3マスをパレットからランダムに埋める
+      */
+      const baseSix = [...palette];
+      const remainingThree = Array.from({ length: 3 }, () => randomItem(palette));
+      pattern = shuffleArray([...baseSix, ...remainingThree]);
+    } else {
+      /*
+        2〜5色の場合は完全ランダム
+      */
+      pattern = Array.from(
         { length: 9 },
         () => randomItem(palette)
       );
+    }
 
 
     hidden = false;
@@ -499,16 +495,18 @@
 
     colorButtons.innerHTML = "";
 
+    const options = [2, 3, 4, 5, 6, "random"];
+    const labels = { 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", random: "ランダム" };
 
-    for (let n = 2; n <= 6; n++) {
+    options.forEach(opt => {
 
       const btn =
         document.createElement("button");
 
-      btn.textContent = n;
+      btn.textContent = labels[opt];
 
       btn.className =
-        n === colorCount
+        opt === selectedMode
           ? "selected"
           : "";
 
@@ -517,7 +515,7 @@
         "click",
         () => {
 
-          colorCount = n;
+          selectedMode = opt;
 
           renderColorButtons();
 
@@ -529,7 +527,7 @@
 
       colorButtons.appendChild(btn);
 
-    }
+    });
 
   }
 
@@ -666,12 +664,6 @@
     }
 
 
-    /*
-      START MEMORYを押した瞬間の時刻を保存。
-      画面を閉じてもDate.now()との差から
-      正確な経過時間を計算できる。
-    */
-
     memoryStart =
       Date.now();
 
@@ -681,17 +673,15 @@
 
 
     /*
-      タイマー開始と同時に
-      問題を自動で隠す。
+      START MEMORYでは隠さず、表示したままにする
     */
-
-    hidden = true;
+    hidden = false;
 
     renderFace();
 
 
     status.textContent =
-      "Memory started. Answer hidden.";
+      "Memory started. Memorize the pattern!";
 
 
     updateButtons();
@@ -723,13 +713,16 @@
       "execution";
 
 
+    /*
+      START EXECUTIONを押したタイミングで隠す
+    */
     hidden = true;
 
     renderFace();
 
 
     status.textContent =
-      "Execution started.";
+      "Execution started. Answer hidden.";
 
 
     updateButtons();
@@ -786,11 +779,6 @@
       formatTime(execution);
 
 
-    /*
-      FINISHしても問題はそのまま。
-      SHOW ANSWERを押すまで答えを隠す。
-    */
-
     hidden = true;
 
     renderFace();
@@ -810,7 +798,7 @@
       createdAt:
         new Date().toISOString(),
 
-      colorCount,
+      colorCount: pattern.length,
 
       pattern:
         pattern.map(
@@ -1108,12 +1096,6 @@
     );
 
 
-  /*
-    スマホで画面を閉じている間も
-    Date.now()ベースなので正しい時間になる。
-    復帰した瞬間に表示を更新する。
-  */
-
   document.addEventListener(
     "visibilitychange",
     () => {
@@ -1145,4 +1127,4 @@
 </script>
 
 </body>
-  </html>
+</html>
