@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cube Art BLD Trainer</title>
+<style>
+  :root {
+    color-scheme: light;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body {
+    margin: 0;
+    background: #fff;
+    color: #111;
+  }
+  main {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.45rem;
+  }
+  .sub {
+    margin: 4px 0 18px;
+    color: #666;
+    font-size: .9rem;
+  }
+  section {
+    margin-top: 18px;
+  }
+  .label {
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .colors {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button {
+    border: 1px solid #bbb;
+    background: #fff;
+    color: #111;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  button.selected {
+    border-color: #111;
+    background: #111;
+    color: #fff;
+  }
+  button.primary {
+    border-color: #111;
+    background: #111;
+    color: #fff;
+    width: 100%;
+    font-weight: 700;
+  }
+  button:disabled {
+    opacity: .4;
+    cursor: default;
+  }
+  .face-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 22px 0 16px;
+  }
+  #face {
+    width: min(82vw, 360px);
+    height: min(82vw, 360px);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    background: #111;
+    border: 3px solid #111;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cell {
+    min-width: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .hidden {
+    background: #111 !important;
+  }
+  .controls {
+    display: grid;
+    gap: 8px;
+  }
+  .timer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .timer {
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .timer-name {
+    color: #666;
+    font-size: .85rem;
+  }
+  .time {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  .status {
+    margin-top: 10px;
+    min-height: 1.4em;
+    color: #555;
+    font-size: .9rem;
+  }
+  .history {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+  }
+  .history th, .history td {
+    border-bottom: 1px solid #eee;
+    padding: 7px 4px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .history th:first-child, .history td:first-child { text-align: left; }
+  .export {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .export button { flex: 1; min-width: 110px; }
+  .small {
+    color: #777;
+    font-size: .78rem;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cube Art BLD Trainer</h1>
+  <div class="sub">Random Face Trainer</div>
+
+  <section>
+    <div class="label">Colors</div>
+    <div class="colors" id="colorButtons"></div>
+  </section>
+
+  <div class="face-wrap">
+    <div id="face" aria-label="3 by 3 cube art"></div>
+  </div>
+
+  <div class="controls">
+    <button id="newBtn" class="primary">NEW</button>
+    <button id="hideBtn">HIDE</button>
+  </div>
+
+  <section>
+    <div class="timer-grid">
+      <div class="timer">
+        <div class="timer-name">Memory</div>
+        <div class="time" id="memoryTime">0.000</div>
+      </div>
+      <div class="timer">
+        <div class="timer-name">Execution</div>
+        <div class="time" id="executionTime">0.000</div>
+      </div>
+    </div>
+
+    <div class="controls" style="margin-top:10px">
+      <button id="memoryBtn">START MEMORY</button>
+      <button id="executionBtn" disabled>START EXECUTION</button>
+      <button id="finishBtn" disabled>FINISH</button>
+    </div>
+    <div class="status" id="status">Ready</div>
+  </section>
+
+  <section>
+    <div class="label">History</div>
+    <div style="overflow-x:auto">
+      <table class="history">
+        <thead>
+          <tr><th>#</th><th>Colors</th><th>Memory</th><th>Execution</th><th>Total</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Export</div>
+    <div class="export">
+      <button id="csvBtn">CSV</button>
+      <button id="jsonBtn">JSON</button>
+      <button id="txtBtn">TXT</button>
+    </div>
+    <p class="small">履歴はこのブラウザのlocalStorageに保存されます。エクスポートしたファイルは端末に保存できます。</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const STORAGE_KEY = "cubeArtBLDHistory_v1";
+  const COLORS = [
+    { name: "white",  hex: "#ffffff" },
+    { name: "yellow", hex: "#ffd800" },
+    { name: "red",    hex: "#d71920" },
+    { name: "orange", hex: "#ff7a00" },
+    { name: "blue",   hex: "#1976d2" },
+    { name: "green",  hex: "#16a05d" }
+  ];
+
+  let colorCount = 3;
+  let pattern = [];
+  let hidden = false;
+  let phase = "ready";
+  let memoryStart = null;
+  let memoryEnd = null;
+  let executionStart = null;
+  let executionEnd = null;
+  let history = loadHistory();
+  let rafId = null;
+
+  const face = document.getElementById("face");
+  const colorButtons = document.getElementById("colorButtons");
+  const memoryTime = document.getElementById("memoryTime");
+  const executionTime = document.getElementById("executionTime");
+  const status = document.getElementById("status");
+  const memoryBtn = document.getElementById("memoryBtn");
+  const executionBtn = document.getElementById("executionBtn");
+  const finishBtn = document.getElementById("finishBtn");
+  const hideBtn = document.getElementById("hideBtn");
+  const newBtn = document.getElementById("newBtn");
+  const historyBody = document.getElementById("historyBody");
+
+  function loadHistory() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  }
+
+  function randomItem(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function newPattern() {
+    const palette = COLORS.slice(0, colorCount);
+    pattern = Array.from({length: 9}, () => randomItem(palette));
+    hidden = false;
+    phase = "ready";
+    memoryStart = memoryEnd = executionStart = executionEnd = null;
+    memoryTime.textContent = "0.000";
+    executionTime.textContent = "0.000";
+    renderFace();
+    updateButtons();
+    status.textContent = "Ready";
+  }
+
+  function renderFace() {
+    face.innerHTML = "";
+    pattern.forEach(c => {
+      const cell = document.createElement("div");
+      cell.className = "cell" + (hidden ? " hidden" : "");
+      cell.style.background = c.hex;
+      face.appendChild(cell);
+    });
+  }
+
+  function renderColorButtons() {
+    colorButtons.innerHTML = "";
+    for (let n = 2; n <= 6; n++) {
+      const btn = document.createElement("button");
+      btn.textContent = n;
+      btn.className = n === colorCount ? "selected" : "";
+      btn.addEventListener("click", () => {
+        colorCount = n;
+        renderColorButtons();
+        newPattern();
+      });
+      colorButtons.appendChild(btn);
+    }
+  }
+
+  function elapsed(start, end = Date.now()) {
+    return start == null ? 0 : Math.max(0, end - start) / 1000;
+  }
+
+  function formatTime(sec) {
+    return sec.toFixed(3);
+  }
+
+  function updateTimerDisplay() {
+    if (phase === "memory") {
+      memoryTime.textContent = formatTime(elapsed(memoryStart));
+    } else if (memoryStart !== null && memoryEnd !== null) {
+      memoryTime.textContent = formatTime(elapsed(memoryStart, memoryEnd));
+    }
+
+    if (phase === "execution") {
+      executionTime.textContent = formatTime(elapsed(executionStart));
+    } else if (executionStart !== null && executionEnd !== null) {
+      executionTime.textContent = formatTime(elapsed(executionStart, executionEnd));
+    }
+
+    if (phase === "memory" || phase === "execution") {
+      rafId = requestAnimationFrame(updateTimerDisplay);
+    }
+  }
+
+  function stopAnimation() {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  function updateButtons() {
+    memoryBtn.disabled = phase !== "ready";
+    executionBtn.disabled = phase !== "memory";
+    finishBtn.disabled = phase !== "execution";
+    hideBtn.disabled = phase === "execution" || phase === "finished";
+    hideBtn.textContent = hidden ? "SHOW" : "HIDE";
+  }
+
+  function startMemory() {
+    if (phase !== "ready") return;
+    memoryStart = Date.now();
+    phase = "memory";
+    hidden = false;
+    renderFace();
+    status.textContent = "Memorize the pattern.";
+    updateButtons();
+    stopAnimation();
+    updateTimerDisplay();
+  }
+
+  function hideOrShow() {
+    hidden = !hidden;
+    renderFace();
+    hideBtn.textContent = hidden ? "SHOW" : "HIDE";
+  }
+
+  function startExecution() {
+    if (phase !== "memory") return;
+    memoryEnd = Date.now();
+    executionStart = Date.now();
+    phase = "execution";
+    hidden = true;
+    renderFace();
+    status.textContent = "Execute the pattern on your cube.";
+    updateButtons();
+    stopAnimation();
+    updateTimerDisplay();
+  }
+
+  function finish() {
+    if (phase !== "execution") return;
+    executionEnd = Date.now();
+    phase = "finished";
+    stopAnimation();
+
+    const memory = elapsed(memoryStart, memoryEnd);
+    const execution = elapsed(executionStart, executionEnd);
+    const total = memory + execution;
+
+    memoryTime.textContent = formatTime(memory);
+    executionTime.textContent = formatTime(execution);
+
+    history.unshift({
+      id: history.length ? Math.max(...history.map(x => x.id)) + 1 : 1,
+      createdAt: new Date().toISOString(),
+      colorCount,
+      pattern: pattern.map(c => c.name),
+      memory,
+      execution,
+      total
+    });
+    saveHistory();
+    renderHistory();
+    status.textContent = `Finished — Total ${formatTime(total)} s`;
+    updateButtons();
+  }
+
+  function renderHistory() {
+    historyBody.innerHTML = "";
+    history.slice(0, 100).forEach(row => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.id}</td>
+        <td>${row.colorCount}</td>
+        <td>${row.memory.toFixed(3)}</td>
+        <td>${row.execution.toFixed(3)}</td>
+        <td>${row.total.toFixed(3)}</td>
+      `;
+      historyBody.appendChild(tr);
+    });
+  }
+
+  function download(filename, content, type) {
+    const blob = new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportCSV() {
+    const header = ["id","createdAt","colorCount","pattern","memory","execution","total"];
+    const rows = history.map(r => [
+      r.id, r.createdAt, r.colorCount, r.pattern.join(" "),
+      r.memory.toFixed(3), r.execution.toFixed(3), r.total.toFixed(3)
+    ]);
+    const csv = [header, ...rows]
+      .map(row => row.map(v => `"${String(v).replaceAll('"','""')}"`).join(","))
+      .join("\\n");
+    download("cube-art-bld-history.csv", csv, "text/csv;charset=utf-8");
+  }
+
+  function exportJSON() {
+    download("cube-art-bld-history.json", JSON.stringify(history, null, 2), "application/json;charset=utf-8");
+  }
+
+  function exportTXT() {
+    const lines = [
+      "Cube Art BLD Trainer",
+      "",
+      ...history.map(r =>
+        `#${r.id} | Colors: ${r.colorCount} | Memory: ${r.memory.toFixed(3)}s | Execution: ${r.execution.toFixed(3)}s | Total: ${r.total.toFixed(3)}s | Pattern: ${r.pattern.join(" ")}`
+      )
+    ];
+    download("cube-art-bld-history.txt", lines.join("\\n"), "text/plain;charset=utf-8");
+  }
+
+  newBtn.addEventListener("click", newPattern);
+  hideBtn.addEventListener("click", hideOrShow);
+  memoryBtn.addEventListener("click", startMemory);
+  executionBtn.addEventListener("click", startExecution);
+  finishBtn.addEventListener("click", finish);
+  document.getElementById("csvBtn").addEventListener("click", exportCSV);
+  document.getElementById("jsonBtn").addEventListener("click", exportJSON);
+  document.getElementById("txtBtn").addEventListener("click", exportTXT);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && (phase === "memory" || phase === "execution")) {
+      updateTimerDisplay();
+    }
+  });
+
+  renderColorButtons();
+  renderHistory();
+  newPattern();
+})();
+</script>
+</body>
+</html>
