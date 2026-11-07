@@ -146,6 +146,39 @@
     font-size: .9rem;
   }
 
+  .result-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .result-buttons button {
+    flex: 1;
+    font-weight: 700;
+  }
+
+  .btn-success {
+    border-color: #16a05d !important;
+    background: #e8f5e9 !important;
+    color: #1b5e20 !important;
+  }
+
+  .btn-success.selected {
+    background: #16a05d !important;
+    color: #fff !important;
+  }
+
+  .btn-fail {
+    border-color: #d71920 !important;
+    background: #ffebee !important;
+    color: #b71c1c !important;
+  }
+
+  .btn-fail.selected {
+    background: #d71920 !important;
+    color: #fff !important;
+  }
+
   .history {
     width: 100%;
     border-collapse: collapse;
@@ -163,6 +196,15 @@
   .history th:first-child,
   .history td:first-child {
     text-align: left;
+  }
+
+  .history button.delete-btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    background: #fff;
+    color: #d71920;
+    border-color: #d71920;
   }
 
   .export {
@@ -203,6 +245,12 @@
   <div class="controls">
     <button id="newBtn" class="primary">NEW</button>
     <button id="showBtn" disabled>SHOW ANSWER</button>
+  </div>
+
+  <!-- Show Answer後に選択する成功・失敗ボタン -->
+  <div class="result-buttons" id="resultButtonsContainer" style="display: none;">
+    <button id="successBtn" class="btn-success">SUCCESS (成功)</button>
+    <button id="failBtn" class="btn-fail">FAIL (失敗)</button>
   </div>
 
   <section>
@@ -254,10 +302,12 @@
         <thead>
           <tr>
             <th>#</th>
+            <th>Result</th>
             <th>Colors</th>
             <th>Memory</th>
             <th>Execution</th>
             <th>Total</th>
+            <th></th>
           </tr>
         </thead>
 
@@ -295,7 +345,7 @@
 
 (() => {
 
-  const STORAGE_KEY = "cubeArtBLDHistory_v2";
+  const STORAGE_KEY = "cubeArtBLDHistory_v3";
 
   const COLORS = [
     { name: "white",  hex: "#ffffff" },
@@ -306,95 +356,56 @@
     { name: "green",  hex: "#16a05d" }
   ];
 
-  /*
-    mode: 2, 3, 4, 5, 6, または "random"
-  */
   let selectedMode = 3;
-
   let pattern = [];
-
   let hidden = false;
-
   let phase = "ready";
 
   let memoryStart = null;
   let memoryEnd = null;
-
   let executionStart = null;
   let executionEnd = null;
 
   let history = loadHistory();
-
   let rafId = null;
 
+  // 今回の試行で追加された最新の履歴IDを保持
+  let currentSessionId = null;
 
-  const face =
-    document.getElementById("face");
 
-  const colorButtons =
-    document.getElementById("colorButtons");
-
-  const memoryTime =
-    document.getElementById("memoryTime");
-
-  const executionTime =
-    document.getElementById("executionTime");
-
-  const status =
-    document.getElementById("status");
-
-  const memoryBtn =
-    document.getElementById("memoryBtn");
-
-  const executionBtn =
-    document.getElementById("executionBtn");
-
-  const finishBtn =
-    document.getElementById("finishBtn");
-
-  const showBtn =
-    document.getElementById("showBtn");
-
-  const newBtn =
-    document.getElementById("newBtn");
-
-  const historyBody =
-    document.getElementById("historyBody");
+  const face = document.getElementById("face");
+  const colorButtons = document.getElementById("colorButtons");
+  const memoryTime = document.getElementById("memoryTime");
+  const executionTime = document.getElementById("executionTime");
+  const status = document.getElementById("status");
+  const memoryBtn = document.getElementById("memoryBtn");
+  const executionBtn = document.getElementById("executionBtn");
+  const finishBtn = document.getElementById("finishBtn");
+  const showBtn = document.getElementById("showBtn");
+  const newBtn = document.getElementById("newBtn");
+  const historyBody = document.getElementById("historyBody");
+  
+  const resultButtonsContainer = document.getElementById("resultButtonsContainer");
+  const successBtn = document.getElementById("successBtn");
+  const failBtn = document.getElementById("failBtn");
 
 
   function loadHistory() {
-
     try {
-
-      return JSON.parse(
-        localStorage.getItem(STORAGE_KEY) || "[]"
-      );
-
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     } catch {
-
       return [];
-
     }
-
   }
 
 
   function saveHistory() {
-
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(history)
-    );
-
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
   }
 
 
   function randomItem(arr) {
-
-    return arr[
-      Math.floor(Math.random() * arr.length)
-    ];
-
+    return arr[Math.floor(Math.random() * arr.length)];
   }
 
 
@@ -409,11 +420,8 @@
 
 
   function newPattern() {
-
-    // 実際に何色使うかを決定
     let actualCount = selectedMode;
     if (selectedMode === "random") {
-      // 2〜6の中からランダム
       actualCount = Math.floor(Math.random() * 5) + 2;
     }
 
@@ -421,705 +429,322 @@
     const palette = shuffledColors.slice(0, actualCount);
 
     if (actualCount === 6) {
-      /*
-        6色選ばれた場合は、9マスの中に6色が「必ず」すべて1回以上入るようにし、
-        残りの3マスをパレットからランダムに埋める
-      */
       const baseSix = [...palette];
       const remainingThree = Array.from({ length: 3 }, () => randomItem(palette));
       pattern = shuffleArray([...baseSix, ...remainingThree]);
     } else {
-      /*
-        2〜5色の場合は完全ランダム
-      */
-      pattern = Array.from(
-        { length: 9 },
-        () => randomItem(palette)
-      );
+      pattern = Array.from({ length: 9 }, () => randomItem(palette));
     }
 
-
     hidden = false;
-
     phase = "ready";
-
     memoryStart = null;
     memoryEnd = null;
-
     executionStart = null;
     executionEnd = null;
+    currentSessionId = null;
 
+    memoryTime.textContent = "0.000";
+    executionTime.textContent = "0.000";
 
-    memoryTime.textContent =
-      "0.000";
-
-    executionTime.textContent =
-      "0.000";
-
+    resultButtonsContainer.style.display = "none";
+    successBtn.classList.remove("selected");
+    failBtn.classList.remove("selected");
 
     renderFace();
-
     updateButtons();
-
-    status.textContent =
-      "Ready";
-
+    status.textContent = "Ready";
   }
 
 
   function renderFace() {
-
     face.innerHTML = "";
-
-
     pattern.forEach(c => {
-
-      const cell =
-        document.createElement("div");
-
-      cell.className =
-        "cell" +
-        (hidden ? " hidden" : "");
-
-      cell.style.background =
-        c.hex;
-
+      const cell = document.createElement("div");
+      cell.className = "cell" + (hidden ? " hidden" : "");
+      cell.style.background = c.hex;
       face.appendChild(cell);
-
     });
-
   }
 
 
   function renderColorButtons() {
-
     colorButtons.innerHTML = "";
-
     const options = [2, 3, 4, 5, 6, "random"];
     const labels = { 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", random: "ランダム" };
 
     options.forEach(opt => {
-
-      const btn =
-        document.createElement("button");
-
+      const btn = document.createElement("button");
       btn.textContent = labels[opt];
-
-      btn.className =
-        opt === selectedMode
-          ? "selected"
-          : "";
-
-
-      btn.addEventListener(
-        "click",
-        () => {
-
-          selectedMode = opt;
-
-          renderColorButtons();
-
-          newPattern();
-
-        }
-      );
-
-
+      btn.className = opt === selectedMode ? "selected" : "";
+      btn.addEventListener("click", () => {
+        selectedMode = opt;
+        renderColorButtons();
+        newPattern();
+      });
       colorButtons.appendChild(btn);
-
     });
-
   }
 
 
-  function elapsed(
-    start,
-    end = Date.now()
-  ) {
-
-    if (start == null) {
-      return 0;
-    }
-
-    return Math.max(
-      0,
-      end - start
-    ) / 1000;
-
+  function elapsed(start, end = Date.now()) {
+    if (start == null) return 0;
+    return Math.max(0, end - start) / 1000;
   }
 
 
   function formatTime(sec) {
-
     return sec.toFixed(3);
-
   }
 
 
   function updateTimerDisplay() {
-
     if (phase === "memory") {
-
-      memoryTime.textContent =
-        formatTime(
-          elapsed(memoryStart)
-        );
-
+      memoryTime.textContent = formatTime(elapsed(memoryStart));
+    } else if (memoryStart !== null && memoryEnd !== null) {
+      memoryTime.textContent = formatTime(elapsed(memoryStart, memoryEnd));
     }
-
-    else if (
-      memoryStart !== null &&
-      memoryEnd !== null
-    ) {
-
-      memoryTime.textContent =
-        formatTime(
-          elapsed(
-            memoryStart,
-            memoryEnd
-          )
-        );
-
-    }
-
 
     if (phase === "execution") {
-
-      executionTime.textContent =
-        formatTime(
-          elapsed(executionStart)
-        );
-
+      executionTime.textContent = formatTime(elapsed(executionStart));
+    } else if (executionStart !== null && executionEnd !== null) {
+      executionTime.textContent = formatTime(elapsed(executionStart, executionEnd));
     }
 
-    else if (
-      executionStart !== null &&
-      executionEnd !== null
-    ) {
-
-      executionTime.textContent =
-        formatTime(
-          elapsed(
-            executionStart,
-            executionEnd
-          )
-        );
-
+    if (phase === "memory" || phase === "execution") {
+      rafId = requestAnimationFrame(updateTimerDisplay);
     }
-
-
-    if (
-      phase === "memory" ||
-      phase === "execution"
-    ) {
-
-      rafId =
-        requestAnimationFrame(
-          updateTimerDisplay
-        );
-
-    }
-
   }
 
 
   function stopAnimation() {
-
     if (rafId !== null) {
-
       cancelAnimationFrame(rafId);
-
     }
-
     rafId = null;
-
   }
 
 
   function updateButtons() {
-
-    memoryBtn.disabled =
-      phase !== "ready";
-
-
-    executionBtn.disabled =
-      phase !== "memory";
-
-
-    finishBtn.disabled =
-      phase !== "execution";
-
-
-    showBtn.disabled =
-      phase !== "finished" ||
-      !hidden;
-
+    memoryBtn.disabled = phase !== "ready";
+    executionBtn.disabled = phase !== "memory";
+    finishBtn.disabled = phase !== "execution";
+    showBtn.disabled = phase !== "finished" || !hidden;
   }
 
 
   function startMemory() {
-
-    if (phase !== "ready") {
-      return;
-    }
-
-
-    memoryStart =
-      Date.now();
-
-
-    phase =
-      "memory";
-
-
-    /*
-      START MEMORYでは隠さず、表示したままにする
-    */
+    if (phase !== "ready") return;
+    memoryStart = Date.now();
+    phase = "memory";
     hidden = false;
-
     renderFace();
-
-
-    status.textContent =
-      "Memory started. Memorize the pattern!";
-
-
+    status.textContent = "Memory started. Memorize the pattern!";
     updateButtons();
-
-
     stopAnimation();
-
     updateTimerDisplay();
-
   }
 
 
   function startExecution() {
-
-    if (phase !== "memory") {
-      return;
-    }
-
-
-    memoryEnd =
-      Date.now();
-
-
-    executionStart =
-      Date.now();
-
-
-    phase =
-      "execution";
-
-
-    /*
-      START EXECUTIONを押したタイミングで隠す
-    */
+    if (phase !== "memory") return;
+    memoryEnd = Date.now();
+    executionStart = Date.now();
+    phase = "execution";
     hidden = true;
-
     renderFace();
-
-
-    status.textContent =
-      "Execution started. Answer hidden.";
-
-
+    status.textContent = "Execution started. Answer hidden.";
     updateButtons();
-
-
     stopAnimation();
-
     updateTimerDisplay();
-
   }
 
 
   function finish() {
-
-    if (phase !== "execution") {
-      return;
-    }
-
-
-    executionEnd =
-      Date.now();
-
-
-    phase =
-      "finished";
-
-
+    if (phase !== "execution") return;
+    executionEnd = Date.now();
+    phase = "finished";
     stopAnimation();
 
+    const memory = elapsed(memoryStart, memoryEnd);
+    const execution = elapsed(executionStart, executionEnd);
+    const total = memory + execution;
 
-    const memory =
-      elapsed(
-        memoryStart,
-        memoryEnd
-      );
-
-
-    const execution =
-      elapsed(
-        executionStart,
-        executionEnd
-      );
-
-
-    const total =
-      memory + execution;
-
-
-    memoryTime.textContent =
-      formatTime(memory);
-
-
-    executionTime.textContent =
-      formatTime(execution);
-
+    memoryTime.textContent = formatTime(memory);
+    executionTime.textContent = formatTime(execution);
 
     hidden = true;
-
     renderFace();
 
+    currentSessionId = history.length ? Math.max(...history.map(x => x.id)) + 1 : 1;
 
     history.unshift({
-
-      id:
-        history.length
-          ? Math.max(
-              ...history.map(
-                x => x.id
-              )
-            ) + 1
-          : 1,
-
-      createdAt:
-        new Date().toISOString(),
-
+      id: currentSessionId,
+      createdAt: new Date().toISOString(),
       colorCount: pattern.length,
-
-      pattern:
-        pattern.map(
-          c => c.name
-        ),
-
+      pattern: pattern.map(c => c.name),
       memory,
-
       execution,
-
-      total
-
+      total,
+      result: "-" // 初期状態
     });
 
-
     saveHistory();
-
     renderHistory();
 
-
-    status.textContent =
-      `Finished — Total ${formatTime(total)} s. Show the answer to check.`;
-
-
+    status.textContent = `Finished — Total ${formatTime(total)} s. Show the answer to evaluate.`;
     updateButtons();
-
   }
 
 
   function showAnswer() {
-
-    if (phase !== "finished") {
-      return;
-    }
-
-
+    if (phase !== "finished") return;
     hidden = false;
-
     renderFace();
-
-
     showBtn.disabled = true;
 
+    // 答えを表示した後に成功・失敗ボタンを表示
+    resultButtonsContainer.style.display = "flex";
+    status.textContent = "Answer shown. Please select Success or Fail.";
+  }
 
-    status.textContent =
-      "Answer shown. Press NEW for the next problem.";
 
+  function setRecordResult(isSuccess) {
+    if (currentSessionId === null) return;
+
+    const item = history.find(x => x.id === currentSessionId);
+    if (item) {
+      item.result = isSuccess ? "Success" : "Fail";
+      saveHistory();
+      renderHistory();
+    }
+
+    if (isSuccess) {
+      successBtn.classList.add("selected");
+      failBtn.classList.remove("selected");
+      status.textContent = "Recorded as Success! Press NEW for the next problem.";
+    } else {
+      failBtn.classList.add("selected");
+      successBtn.classList.remove("selected");
+      status.textContent = "Recorded as Fail. Press NEW for the next problem.";
+    }
+  }
+
+
+  function deleteHistoryItem(id) {
+    history = history.filter(x => x.id !== id);
+    saveHistory();
+    renderHistory();
   }
 
 
   function renderHistory() {
-
     historyBody.innerHTML = "";
 
+    history.slice(0, 100).forEach(row => {
+      const tr = document.createElement("tr");
 
-    history
-      .slice(0, 100)
-      .forEach(row => {
+      let resultBadge = row.result || "-";
+      if (row.result === "Success") resultBadge = "🟢 Success";
+      if (row.result === "Fail") resultBadge = "🔴 Fail";
 
-        const tr =
-          document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.id}</td>
+        <td>${resultBadge}</td>
+        <td>${row.colorCount}</td>
+        <td>${row.memory.toFixed(3)}</td>
+        <td>${row.execution.toFixed(3)}</td>
+        <td>${row.total.toFixed(3)}</td>
+        <td><button class="delete-btn" data-id="${row.id}">削除</button></td>
+      `;
 
+      historyBody.appendChild(tr);
+    });
 
-        tr.innerHTML = `
-
-          <td>${row.id}</td>
-
-          <td>${row.colorCount}</td>
-
-          <td>${row.memory.toFixed(3)}</td>
-
-          <td>${row.execution.toFixed(3)}</td>
-
-          <td>${row.total.toFixed(3)}</td>
-
-        `;
-
-
-        historyBody.appendChild(tr);
-
+    // 削除ボタンのイベント紐付け
+    document.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const id = parseInt(e.target.getAttribute("data-id"), 10);
+        deleteHistoryItem(id);
       });
-
+    });
   }
 
 
-  function download(
-    filename,
-    content,
-    type
-  ) {
-
-    const blob =
-      new Blob(
-        [content],
-        { type }
-      );
-
-
-    const url =
-      URL.createObjectURL(blob);
-
-
-    const a =
-      document.createElement("a");
-
-
-    a.href =
-      url;
-
-
-    a.download =
-      filename;
-
-
+  function download(filename, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
     document.body.appendChild(a);
-
-
     a.click();
-
-
     a.remove();
-
-
-    setTimeout(
-      () =>
-        URL.revokeObjectURL(url),
-      1000
-    );
-
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
 
   function exportCSV() {
+    const header = ["id", "result", "createdAt", "colorCount", "pattern", "memory", "execution", "total"];
+    const rows = history.map(r => [
+      r.id,
+      r.result || "-",
+      r.createdAt,
+      r.colorCount,
+      r.pattern.join(" "),
+      r.memory.toFixed(3),
+      r.execution.toFixed(3),
+      r.total.toFixed(3)
+    ]);
 
-    const header = [
-      "id",
-      "createdAt",
-      "colorCount",
-      "pattern",
-      "memory",
-      "execution",
-      "total"
-    ];
+    const csv = [header, ...rows]
+      .map(row => row.map(v => `"${String(v).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
 
-
-    const rows =
-      history.map(r => [
-
-        r.id,
-
-        r.createdAt,
-
-        r.colorCount,
-
-        r.pattern.join(" "),
-
-        r.memory.toFixed(3),
-
-        r.execution.toFixed(3),
-
-        r.total.toFixed(3)
-
-      ]);
-
-
-    const csv =
-      [header, ...rows]
-
-        .map(row =>
-          row
-            .map(v =>
-              `"${String(v)
-                .replaceAll('"', '""')}"`
-            )
-            .join(",")
-        )
-
-        .join("\n");
-
-
-    download(
-      "cube-art-bld-history.csv",
-      csv,
-      "text/csv;charset=utf-8"
-    );
-
+    download("cube-art-bld-history.csv", csv, "text/csv;charset=utf-8");
   }
 
 
   function exportJSON() {
-
-    download(
-
-      "cube-art-bld-history.json",
-
-      JSON.stringify(
-        history,
-        null,
-        2
-      ),
-
-      "application/json;charset=utf-8"
-
-    );
-
+    download("cube-art-bld-history.json", JSON.stringify(history, null, 2), "application/json;charset=utf-8");
   }
 
 
   function exportTXT() {
-
     const lines = [
-
       "Cube Art BLD Trainer",
-
       "",
-
       ...history.map(r =>
-
-        `#${r.id} | ` +
-        `Colors: ${r.colorCount} | ` +
-        `Memory: ${r.memory.toFixed(3)}s | ` +
-        `Execution: ${r.execution.toFixed(3)}s | ` +
-        `Total: ${r.total.toFixed(3)}s | ` +
-        `Pattern: ${r.pattern.join(" ")}`
-
+        `#${r.id} | Result: ${r.result || "-"} | Colors: ${r.colorCount} | Memory: ${r.memory.toFixed(3)}s | Execution: ${r.execution.toFixed(3)}s | Total: ${r.total.toFixed(3)}s | Pattern: ${r.pattern.join(" ")}`
       )
-
     ];
-
-
-    download(
-
-      "cube-art-bld-history.txt",
-
-      lines.join("\n"),
-
-      "text/plain;charset=utf-8"
-
-    );
-
+    download("cube-art-bld-history.txt", lines.join("\n"), "text/plain;charset=utf-8");
   }
 
 
-  newBtn.addEventListener(
-    "click",
-    newPattern
-  );
+  newBtn.addEventListener("click", newPattern);
+  showBtn.addEventListener("click", showAnswer);
+  memoryBtn.addEventListener("click", startMemory);
+  executionBtn.addEventListener("click", startExecution);
+  finishBtn.addEventListener("click", finish);
+
+  successBtn.addEventListener("click", () => setRecordResult(true));
+  failBtn.addEventListener("click", () => setRecordResult(false));
+
+  document.getElementById("csvBtn").addEventListener("click", exportCSV);
+  document.getElementById("jsonBtn").addEventListener("click", exportJSON);
+  document.getElementById("txtBtn").addEventListener("click", exportTXT);
 
 
-  showBtn.addEventListener(
-    "click",
-    showAnswer
-  );
-
-
-  memoryBtn.addEventListener(
-    "click",
-    startMemory
-  );
-
-
-  executionBtn.addEventListener(
-    "click",
-    startExecution
-  );
-
-
-  finishBtn.addEventListener(
-    "click",
-    finish
-  );
-
-
-  document
-    .getElementById("csvBtn")
-    .addEventListener(
-      "click",
-      exportCSV
-    );
-
-
-  document
-    .getElementById("jsonBtn")
-    .addEventListener(
-      "click",
-      exportJSON
-    );
-
-
-  document
-    .getElementById("txtBtn")
-    .addEventListener(
-      "click",
-      exportTXT
-    );
-
-
-  document.addEventListener(
-    "visibilitychange",
-    () => {
-
-      if (
-        !document.hidden &&
-        (
-          phase === "memory" ||
-          phase === "execution"
-        )
-      ) {
-
-        updateTimerDisplay();
-
-      }
-
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && (phase === "memory" || phase === "execution")) {
+      updateTimerDisplay();
     }
-  );
+  });
 
 
   renderColorButtons();
-
   renderHistory();
-
   newPattern();
 
 })();
